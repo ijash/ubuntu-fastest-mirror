@@ -241,14 +241,16 @@ select_mirror() {
     if [ "$backup" = true ]; then
         time_postfix=$(date -u +"UTC%Y-%m-%dT%H_%M_%S")
         mkdir -p /etc/apt/sources.list.backup && cp -rp /etc/apt/sources.list /etc/apt/sources.list.backup/sources.list."$time_postfix".bak
-        if [-f /etc/apt/sources.list.backup/sources.list."$time_postfix".bak]; then
-            echo -e "Backup created in /etc/apt/sources.list.backup/sources.list."$time_postfix".bak\n"
+
+        if [ -f "/etc/apt/sources.list.backup/sources.list.$time_postfix.bak" ]; then
+            echo -e "Backup created in /etc/apt/sources.list.backup/sources.list.$time_postfix.bak\n"
         else
             echo "Backup failed."
             exit 1
         fi
+
     fi
-    
+
     echo "Selected mirror: $newMirror"
     echo "Updating sources.list..."
     sudo sed -i "s|deb [a-z]*://[^ ]* |deb ${newMirror} |g" /etc/apt/sources.list
