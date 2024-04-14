@@ -1,11 +1,12 @@
 #!/bin/bash
+
 #================================================================
 # HEADER
 #================================================================
 #% SYNOPSIS
-#+    ./run [-h|--help] [-c|--country <country-code> ...]
+#%    ./run [-h|--help] [-c|--country <country-code> ...]
 #%
-#%DESCRIPTION
+#% DESCRIPTION
 #%   This script retrieves a list of Ubuntu mirrors based on specified country codes.
 #%   If no country codes are provided, it defaults to using mirrors.txt, which contains
 #%   geographic mirrors based on the client's source IP address. It then tests the speed
@@ -31,17 +32,18 @@
 #%    ./run -a
 #%    ./run
 #%
-#%AUTHOR
+#% AUTHOR
 #%    Jastria Rahmat
 #%    https://github.com/ijash
 #%
-#%LICENSE
+#% LICENSE
 #%    Distributed under the MIT License.
 #%
 #================================================================
 # END_OF_HEADER
 #================================================================
 
+# Constants
 COUNTRY_CODE_INCLUDED=()
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 TOP_LIST_AMOUNT=5
@@ -50,10 +52,12 @@ auto_select=false
 top_mirrors=()
 backup=false
 
+# Function to clean up cache on exit
 cleanup_cache() {
     rm -rf "$SCRIPT_DIR/.cache"
 }
 
+# Function to validate country code
 validate_country_code() {
     local code="$1"
     if ! wget -q --spider "http://mirrors.ubuntu.com/$code.txt"; then
@@ -63,6 +67,7 @@ validate_country_code() {
     return 0
 }
 
+# Function to format color based on speed
 format_color() {
     local speed_bps=$1
     speed_kbps=$(bc -l <<<"$speed_bps / 1000")
@@ -82,6 +87,7 @@ format_color() {
     fi
 }
 
+# Function to convert speed to human-readable format
 convert_speed() {
     local speed=$1
     if ((speed >= 1000000000)); then
@@ -95,10 +101,12 @@ convert_speed() {
     fi
 }
 
+# Function to show help message
 show_help() {
     awk '/^#%/{gsub(/^#% ?/,""); print}' "$0"
 }
 
+# Function to process command line arguments
 process_arguments() {
     if [[ "$*" == *"-h"* || "$*" == *" --help"* ]]; then
         show_help
@@ -129,6 +137,7 @@ process_arguments() {
     done
 }
 
+# Function to fetch mirrors
 fetch_mirrors() {
     mkdir -p "$SCRIPT_DIR/.cache"
     for country_code in "${COUNTRY_CODE_INCLUDED[@]}"; do
@@ -136,6 +145,7 @@ fetch_mirrors() {
     done
 }
 
+# Function to test mirror speed
 test_mirror_speed() {
     local mirrors=("$@")
     declare -A speeds
@@ -171,6 +181,7 @@ test_mirror_speed() {
     fi
 }
 
+# Function to check country code and retrieve mirrors
 check_country_code() {
     if [ "${#COUNTRY_CODE_INCLUDED[@]}" -eq 0 ]; then
         COUNTRY_CODE_INCLUDED=("mirrors")
@@ -189,6 +200,7 @@ check_country_code() {
     fi
 }
 
+# Function to check if script is run as root
 check_root() {
     if [ "$(id -u)" -ne 0 ]; then
         echo "This script requires root privileges. Please run it with sudo."
@@ -196,6 +208,7 @@ check_root() {
     fi
 }
 
+# Function to select mirror
 select_mirror() {
     real_top_mirrors_count=${#top_mirrors[@]}
 
@@ -222,19 +235,22 @@ select_mirror() {
         newMirror=${top_mirrors[$((newMirror - 1))]}
     fi
     if [ "$backup" = true ]; then
-    time_postfix=$(date -u +"UTC%Y-%m-%dT%H_%M_%S")
-    cp -rp /etc/apt/sources.list /etc/apt/sources.list.backup/sources.list."$time_postfix".bak
-    echo -e "Backup created in /etc/apt/sources.list.backup/sources.list."$time_postfix".bak\n"
+        time_postfix=$(date -u +"UTC%Y-%m-%dT%H_%M_%S")
+        cp -rp /etc/apt/sources.list /etc/apt/sources.list.backup/sources.list."$time_postfix".bak
+        echo -e "Backup created in /etc/apt/sources.list.backup/sources.list."$time_postfix".bak\n"
     fi
     echo "Selected mirror: $newMirror"
     echo "Updating sources.list..."
     sudo sed -i "s|deb [a-z]*://[^ ]* |deb ${newMirror} |g" /etc/apt/sources.list
+    sleep 2
     echo "testing new mirror speed with apt update..."
     sudo rm -rf /var/lib/apt/lists/* && sudo apt update
-    
 }
 
+# Trap to cleanup cache on exit
 trap cleanup_cache EXIT
+
+# Main execution
 process_arguments "$@"
 check_country_code
 fetch_mirrors
