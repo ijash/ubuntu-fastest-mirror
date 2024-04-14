@@ -128,6 +128,10 @@ process_arguments() {
             auto_select=true
             backup=true
             ;;
+        -b | --backup)
+            check_root
+            backup=true
+            ;;
         *)
             show_help
             exit 1
