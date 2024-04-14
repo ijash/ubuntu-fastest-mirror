@@ -5,23 +5,38 @@
 #% SYNOPSIS
 #+    ./run [-h|--help] [-c|--country <country-code> ...]
 #%
-#% DESCRIPTION
-#%    This script retrieves a list of Ubuntu mirrors based on specified country codes.
-#%    If no country codes are provided, it defaults to using mirrors.txt, which contains
-#%    geographic mirrors based on the client's source IP address. It then tests the speed
-#%    of each mirror and displays the top fastest mirrors. You can check the current status
-#%    of mirrors at https://launchpad.net/ubuntu/+archivemirrors and find available country
-#%    codes at http://mirrors.ubuntu.com/.
+#%DESCRIPTION
+#%   This script retrieves a list of Ubuntu mirrors based on specified country codes.
+#%   If no country codes are provided, it defaults to using mirrors.txt, which contains
+#%   geographic mirrors based on the client's source IP address. It then tests the speed
+#%   of each mirror and displays the top fastest mirrors. It can replace the default mirrors
+#%   with the fastest ones and includes backup capabilities. It will create a 'sources.list.backup'
+#%   folder in /etc/apt/ with a backup of the sources.list file before replacing it with the fastest mirrors.
+#%   (if backup is enabled). You can check the current status of mirrors at
+#%   https://launchpad.net/ubuntu/+archivemirrors and find available country codes at
+#%   http://mirrors.ubuntu.com/.
 #%
 #% OPTIONS
 #%    -h, --help       Show this help message and exit.
 #%    -c, --country    Specify one or more country codes to retrieve mirrors from. If not
 #%                     provided, the script will default to using mirrors from
 #%                     http://mirrors.ubuntu.com/mirrors.txt.
+#%    -a, --auto       Select fastest mirror automatically without user
+#%                     prompt. and automatically backup sources.list
+#%    -b, --backup     Backup sources.list to sources.list.backup folder
 #%
 #% EXAMPLES
 #%    ./run -c US JP ID
+#%    ./run -b -c ID
+#%    ./run -a
 #%    ./run
+#%
+#%AUTHOR
+#%    Jastria Rahmat
+#%    https://github.com/ijash
+#%
+#%LICENSE
+#%    Distributed under the MIT License.
 #%
 #================================================================
 # END_OF_HEADER
@@ -31,6 +46,9 @@ COUNTRY_CODE_INCLUDED=()
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 TOP_LIST_AMOUNT=5
 reset_color='\033[0m'
+auto_select=false
+top_mirrors=()
+backup=false
 
 cleanup_cache() {
     rm -rf "$SCRIPT_DIR/.cache"
@@ -78,29 +96,8 @@ convert_speed() {
 }
 
 show_help() {
-    echo "Ubuntu Mirror Speed Checker"
-    echo ""
-    echo "Description:"
-    echo "This script retrieves a list of Ubuntu mirrors based on specified country codes. If no country codes are provided, it defaults to using mirrors.txt, which contains geographic mirrors based on the client's source IP address. It then tests the speed of each mirror and displays the top fastest mirrors. You can check the current status of mirrors at https://launchpad.net/ubuntu/+archivemirrors and find available country codes at http://mirrors.ubuntu.com/."
-    echo ""
-    echo "Usage:"
-    echo "$0 [-h|--help] [-c|--country <country-code> ...]"
-    echo ""
-    echo "Options:"
-    echo "  -h, --help       Show this help message and exit."
-    echo "  -c, --country    Specify one or more country codes to retrieve mirrors from. If not provided, the script will default to using mirrors from http://mirrors.ubuntu.com/mirrors.txt."
-    echo ""
-    echo "Example A:"
-    echo "  $0 -c US JP ID"
-    echo ""
-    echo "Example B:"
-    echo "  $0"
-    echo ""
-    echo "By: Jastria Rahmat | github.com/ijash"
+    awk '/^#%/{gsub(/^#% ?/,""); print}' "$0"
 }
-
-
-trap cleanup_cache EXIT
 
 process_arguments() {
     if [[ "$*" == *"-h"* || "$*" == *" --help"* ]]; then
@@ -117,6 +114,11 @@ process_arguments() {
                 COUNTRY_CODE_INCLUDED+=("$country_code")
                 shift
             done
+            ;;
+        -a | --auto-select)
+            check_root
+            auto_select=true
+            backup=true
             ;;
         *)
             show_help
@@ -161,6 +163,7 @@ test_mirror_speed() {
             mirror=$(echo "$line" | awk '{print $2}')
             speed=$(echo "$line" | awk '{print $3}')
             echo -e "\e[2m$line_number\e[0m $mirror --> $(format_color "$speed") $(convert_speed "$speed") $reset_color"
+            top_mirrors+=("$mirror")
         done <<<"$sorted_mirrors"
 
     else
@@ -168,23 +171,72 @@ test_mirror_speed() {
     fi
 }
 
-process_arguments "$@"
+check_country_code() {
+    if [ "${#COUNTRY_CODE_INCLUDED[@]}" -eq 0 ]; then
+        COUNTRY_CODE_INCLUDED=("mirrors")
+        echo "No country code provided using -c or --country options"
+        echo "Retrieving list from http://mirrors.ubuntu.com/mirrors.txt"
+    else
+        for country_code in "${COUNTRY_CODE_INCLUDED[@]}"; do
+            if ! validate_country_code "$country_code"; then
+                exit 1
+            fi
+        done
+        echo "Using mirrors from:"
+        for country_code in "${COUNTRY_CODE_INCLUDED[@]}"; do
+            echo "http://mirrors.ubuntu.com/$country_code.txt"
+        done
+    fi
+}
 
-if [ "${#COUNTRY_CODE_INCLUDED[@]}" -eq 0 ]; then
-    COUNTRY_CODE_INCLUDED=("mirrors")
-    echo "No country code provided using -c or --country options"
-    echo "Retrieving list from http://mirrors.ubuntu.com/mirrors.txt"
-else
-    for country_code in "${COUNTRY_CODE_INCLUDED[@]}"; do
-        if ! validate_country_code "$country_code"; then
+check_root() {
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "This script requires root privileges. Please run it with sudo."
+        exit 1
+    fi
+}
+
+select_mirror() {
+    real_top_mirrors_count=${#top_mirrors[@]}
+
+    if [ "$real_top_mirrors_count" -eq 0 ]; then
+        echo "Error. No mirrors found."
+        exit 1
+    fi
+
+    if [ "$auto_select" = true ]; then
+        newMirror=${top_mirrors[0]}
+
+    else
+        echo -e "\nSelect one of the top $real_top_mirrors_count fastest mirrors. This will apply the selected mirror to your apt sources.list"
+        read -rp "Select from 1 to $real_top_mirrors_count , or enter 0 to cancel: " newMirror
+        if [ "$newMirror" -eq 0 ]; then
+            echo -e "Cancelled. No changes made.\nExiting..."
+            exit 0
+        fi
+
+        if ! [[ "$newMirror" =~ ^[0-9]+$ ]] || [ "$newMirror" -gt "$real_top_mirrors_count" ] || [ "$newMirror" -lt 1 ]; then
+            echo "Error. Invalid selection."
             exit 1
         fi
-    done
-    echo "Using mirrors from:"
-    for country_code in "${COUNTRY_CODE_INCLUDED[@]}"; do
-        echo "http://mirrors.ubuntu.com/$country_code.txt"
-    done
-fi
+        newMirror=${top_mirrors[$((newMirror - 1))]}
+    fi
+    if [ "$backup" = true ]; then
+    time_postfix=$(date -u +"UTC%Y-%m-%dT%H_%M_%S")
+    cp -rp /etc/apt/sources.list /etc/apt/sources.list.backup/sources.list."$time_postfix".bak
+    echo -e "Backup created in /etc/apt/sources.list.backup/sources.list."$time_postfix".bak\n"
+    fi
+    echo "Selected mirror: $newMirror"
+    echo "Updating sources.list..."
+    sudo sed -i "s|deb [a-z]*://[^ ]* |deb ${newMirror} |g" /etc/apt/sources.list
+    echo "testing new mirror speed with apt update..."
+    sudo rm -rf /var/lib/apt/lists/* && sudo apt update
+    
+}
 
+trap cleanup_cache EXIT
+process_arguments "$@"
+check_country_code
 fetch_mirrors
 test_mirror_speed "${COUNTRY_CODE_INCLUDED[@]}"
+select_mirror
