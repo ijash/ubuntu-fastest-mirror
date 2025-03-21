@@ -4,7 +4,7 @@
 # HEADER
 #================================================================
 #% SYNOPSIS
-#%    ./run [-h|--help] [-c|--country <country-code> ...]
+#%    ./run [-h|--help] [-c|--country <country-code> ...] [-s|--size <size-in-kb>]
 #%
 #% DESCRIPTION
 #%   This script retrieves a list of Ubuntu mirrors based on specified country codes.
@@ -25,11 +25,20 @@
 #%    -a, --auto       Select fastest mirror automatically without user
 #%                     prompt. and automatically backup sources.list
 #%    -b, --backup     Backup sources.list to sources.list.backup folder
+#%    -s, --size       Specify the test size in KB (Kilobytes) for speed tests. Default is 100KB.
+#%                     This is the size of the file downloaded from each mirror for testing.
+#%
+#% DATA UNITS USED
+#%    KB = Kilobytes (1024 bytes) - Used for file sizes
+#%    Kbps = Kilobits per second - Used for network speeds
+#%    Mbps = Megabits per second
+#%    Gbps = Gigabits per second
 #%
 #% EXAMPLES
 #%    ./run -c US JP ID
 #%    ./run -b -c ID
 #%    ./run -a
+#%    ./run -s 500
 #%    ./run
 #%
 #% AUTHOR
@@ -51,6 +60,7 @@ reset_color='\033[0m'
 auto_select=false
 top_mirrors=()
 backup=false
+test_size_in_kb=100
 
 # Function to clean up cache on exit
 cleanup_cache() {
@@ -91,13 +101,13 @@ format_color() {
 convert_speed() {
     local speed=$1
     if ((speed >= 1000000000)); then
-        echo "$(bc -l <<<"scale=1; $speed / 1000000000") Gbps"
+        echo "$(bc -l <<<"scale=1; $speed / 1000000000") Gbps"  # Gigabits per second
     elif ((speed >= 1000000)); then
-        echo "$(bc -l <<<"scale=1; $speed / 1000000") Mbps"
+        echo "$(bc -l <<<"scale=1; $speed / 1000000") Mbps"     # Megabits per second
     elif ((speed >= 1000)); then
-        echo "$(bc -l <<<"scale=1; $speed / 1000") Kbps"
+        echo "$(bc -l <<<"scale=1; $speed / 1000") Kbps"        # Kilobits per second
     else
-        echo "${speed} Bps"
+        echo "${speed} bps"                                      # Bits per second
     fi
 }
 
@@ -117,11 +127,12 @@ process_arguments() {
         case "$1" in
         -c | --country)
             shift
-            while [[ "$1" != "" && "$1" != "-"* ]]; do
+            while [[ "$1" != "" && ! "$1" =~ ^- ]]; do
                 country_code=$(echo "$1" | tr '[:lower:]' '[:upper:]')
                 COUNTRY_CODE_INCLUDED+=("$country_code")
                 shift
             done
+            continue 
             ;;
         -a | --auto-select)
             check_root
@@ -132,7 +143,21 @@ process_arguments() {
             check_root
             backup=true
             ;;
+        -s | --size)
+            shift
+            if [[ "$1" =~ ^[0-9]+$ ]]; then
+                test_size_in_kb="$1"
+            else
+                echo "Error: Size must be a positive integer in KB (Kilobytes)."
+                exit 1
+            fi
+            ;;
+        -h | --help)
+            show_help
+            exit 0
+            ;;
         *)
+            echo "Error: Unknown option: $1"
             show_help
             exit 1
             ;;
@@ -158,12 +183,15 @@ test_mirror_speed() {
         mapfile -t mirrors <"$SCRIPT_DIR/.cache/mirrors.txt"
         total_mirrors=${#mirrors[@]}
 
-        echo -e "\nTesting mirrors for speed..."
-
+        echo -e "\nTesting mirrors for speed on $test_size_in_kb KB of data..."
+        
+        # Convert KB to bytes for curl range parameter, default to 100KB if not defined
+        local test_size_in_bytes=$((${test_size_in_kb:-100} * 1024))
+        
         seq_num=0
         for mirror_url in "${mirrors[@]}"; do
             seq_num=$((seq_num + 1))
-            raw_speed_bps=$(curl --max-time 2 -r 0-102400 -s -w %{speed_download} -o /dev/null "$mirror_url/ls-lR.gz")
+            raw_speed_bps=$(curl --max-time 2 -r 0-$test_size_in_bytes -s -w %{speed_download} -o /dev/null "$mirror_url/ls-lR.gz")
             speed=$(convert_speed "$raw_speed_bps")
             speeds["$mirror_url"]="$raw_speed_bps"
             echo -e "[$seq_num/$total_mirrors] $mirror_url --> $(format_color "$raw_speed_bps") $speed $speed_unit $reset_color"

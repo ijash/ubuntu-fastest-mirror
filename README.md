@@ -12,6 +12,17 @@ The Ubuntu Mirror Selection Script is a Bash script designed to help you find an
 - You need to have Bash installed on your system.
 - Ensure you have the necessary permissions to run the script, especially if you intend to modify system files.
 
+## Data Units Used in This Tool
+
+To avoid confusion, here are the data units used in this script:
+
+- **KB (Kilobytes)**: Used for file sizes (1 KB = 1024 bytes)
+- **Kbps (Kilobits per second)**: Used for network speeds (1 Kbps = 1000 bits per second)
+- **Mbps (Megabits per second)**: Used for higher network speeds (1 Mbps = 1000 Kbps)
+- **Gbps (Gigabits per second)**: Used for very high network speeds (1 Gbps = 1000 Mbps)
+
+Note: When specifying the test size with `-s` option, the value is in KB (Kilobytes), but mirror speeds are shown in bits per second (bps, Kbps, Mbps, or Gbps), which is the standard for network transfer rates.
+
 ## Obtaining the Script
 
 You can obtain the Ubuntu Mirror Selection Script by either downloading it directly from the provided link or by cloning the repository from GitHub:
@@ -73,7 +84,15 @@ To use the script, follow these steps:
    ./run.sh -b
    ```
 
-5. **Default Behavior**: If no options are provided, the script defaults to using mirrors from http://mirrors.ubuntu.com/mirrors.txt.
+5. **Set Test Size**: To customize the size of the data used for testing mirror speed, use the `-s` or `--size` option followed by a size in KB (Kilobytes). The default is 100KB:
+
+   ```bash
+   ./run.sh -s 500
+   ```
+
+   This sets the test size to 500KB, which can provide more accurate speed measurements for faster connections.
+
+6. **Default Behavior**: If no options are provided, the script defaults to using mirrors from http://mirrors.ubuntu.com/mirrors.txt.
 
 ## Example Usage
 
@@ -84,6 +103,25 @@ To use the script, follow these steps:
   ```
 
 - Backup the current sources.list file and select the fastest mirrors from the United States and Japan:
+
   ```bash
   ./run.sh -b -c US JP
   ```
+
+- Test with a larger sample size (500KB) for more accurate results on fast connections:
+
+  ```bash
+  ./run.sh -s 500 -c US
+  ```
+
+- Automatically select the fastest mirror with a smaller test size (50KB) for slow connections:
+
+  ```bash
+  ./run.sh -a -s 50
+  ```
+
+- Combine multiple options for a customized experience:
+  ```bash
+  ./run.sh -b -c JP US -s 200
+  ```
+  This backs up your sources.list, tests mirrors from Japan and the US with a 200KB sample size.
