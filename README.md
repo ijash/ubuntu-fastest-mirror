@@ -22,7 +22,7 @@ You can obtain the Ubuntu Mirror Selection Script by either downloading it direc
   git clone git@github.com:ijash/ubuntu-fastest-mirror.git
   ```
 
-## Getting Started
+## Getting Started (Preparation)
 1. **Downloaded Script**: If you downloaded the script directly, ensure it has executable permissions. You can do this using the following command in your terminal:
    ```bash
    chmod +x run.sh
@@ -31,6 +31,7 @@ You can obtain the Ubuntu Mirror Selection Script by either downloading it direc
 2. **Cloned Repository**: If you cloned the repository, navigate to the repository directory:
    ```bash
    cd ubuntu-fastest-mirror
+   chmod +x run.sh 
    ```
 
 ## Usage
