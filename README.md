@@ -8,8 +8,7 @@ The Ubuntu Mirror Selection Script is a Bash script designed to help you find an
 
 ## Prerequisites
 
-- This script requires a Unix-like environment, such as Linux or macOS.
-- You need to have Bash installed on your system.
+- This script requires an Ubuntu operating system (or possibly it's derivatives). 
 - Ensure you have the necessary permissions to run the script, especially if you intend to modify system files.
 
 ## Data Units Used in This Tool
