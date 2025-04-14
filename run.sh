@@ -5,17 +5,19 @@
 #================================================================
 #% SYNOPSIS
 #%    ./run [-h|--help] [-c|--country <country-code> ...] [-s|--size <size-in-kb>]
+#%          [-L|--legacy] [-a|--auto] [-b|--backup] 
 #%
 #% DESCRIPTION
 #%   This script retrieves a list of Ubuntu mirrors based on specified country codes.
 #%   If no country codes are provided, it defaults to using mirrors.txt, which contains
 #%   geographic mirrors based on the client's source IP address. It then tests the speed
 #%   of each mirror and displays the top fastest mirrors. It can replace the default mirrors
-#%   with the fastest ones and includes backup capabilities. It will create a 'sources.list.backup'
-#%   folder in /etc/apt/ with a backup of the sources.list file before replacing it with the fastest mirrors.
-#%   (if backup is enabled). You can check the current status of mirrors at
-#%   https://launchpad.net/ubuntu/+archivemirrors and find available country codes at
-#%   http://mirrors.ubuntu.com/.
+#%   with the fastest ones and includes backup capabilities. 
+#%   For Ubuntu 24.04+, it will update the "ubuntu.sources" file in "/etc/apt/sources.list.d/".
+#%   For older Ubuntu versions, it will update the traditional "/etc/apt/sources.list" file.
+#%   The script creates backups of the original files before making changes (if backup is enabled).
+#%   You can check the current status of mirrors at https://launchpad.net/ubuntu/+archivemirrors 
+#%   and find available country codes at http://mirrors.ubuntu.com/.
 #%
 #% OPTIONS
 #%    -h, --help       Show this help message and exit.
@@ -23,10 +25,15 @@
 #%                     provided, the script will default to using mirrors from
 #%                     http://mirrors.ubuntu.com/mirrors.txt.
 #%    -a, --auto       Select fastest mirror automatically without user
-#%                     prompt. and automatically backup sources.list
-#%    -b, --backup     Backup sources.list to sources.list.backup folder
+#%                     prompt and automatically create backups.
+#%    -b, --backup     Backup apt sources files before making changes.
+#%                     For Ubuntu 24.04+: creates backups of "ubuntu.sources" file in sources.list.d/
+#%                     For older Ubuntu: creates backup of sources.list
 #%    -s, --size       Specify the test size in KB (Kilobytes) for speed tests. Default is 100KB.
 #%                     This is the size of the file downloaded from each mirror for testing.
+#%    -L, --legacy     Force using the legacy method (sources.list) even if Ubuntu version is 24.04+
+#%                     or if version detection fails. By default without this option, if Ubuntu version
+#%                     can't be determined, the script will use the Ubuntu 24.04+ method.
 #%
 #% DATA UNITS USED
 #%    KB = Kilobytes (1024 bytes) - Used for file sizes
@@ -61,6 +68,7 @@ auto_select=false
 top_mirrors=()
 backup=false
 test_size_in_kb=100
+force_legacy_mode=false
 
 # Function to clean up cache on exit
 cleanup_cache() {
@@ -152,6 +160,9 @@ process_arguments() {
                 exit 1
             fi
             ;;
+        -L | --legacy)
+            force_legacy_mode=true
+            ;;
         -h | --help)
             show_help
             exit 0
@@ -185,6 +196,11 @@ check_ubuntu_version() {
 
 # Function to determine if Ubuntu version is 24.04 or newer
 is_ubuntu_24_or_newer() {
+    # If force_legacy_mode is enabled, always return false to use legacy format
+    if [ "$force_legacy_mode" = true ]; then
+        return 1  # false - use legacy format when -L option is provided
+    fi
+
     local version
     version=$(check_ubuntu_version)
     if [[ -n "$version" ]]; then
@@ -194,16 +210,50 @@ is_ubuntu_24_or_newer() {
             return 1  # false - is older than 24.04
         fi
     else
-        # If version check fails, default to the older format for safety
-        return 1
+        # If version check fails, default to Ubuntu 24.04 format
+        # unless force_legacy_mode is true (already handled above)
+        return 0
     fi
+}
+
+# Function to display Ubuntu version information to the user
+display_ubuntu_info() {
+    local version
+    version=$(check_ubuntu_version)
+    
+    echo -e "\n=== Ubuntu Version Information ==="
+    
+    if [[ -n "$version" ]]; then
+        echo -e "Detected: Ubuntu $version"
+    else
+        echo -e "Unable to detect Ubuntu version."
+    fi
+    
+    if [ "$force_legacy_mode" = true ]; then
+        echo -e "Legacy mode forced with -L option."
+        echo -e "This script will update sources using the legacy format."
+        echo -e "Target file: /etc/apt/sources.list"
+    elif is_ubuntu_24_or_newer; then
+        echo -e "This script will update sources using the new .sources format for Ubuntu 24.04+."
+        echo -e "Target file: ubuntu.sources in /etc/apt/sources.list.d/"
+    else
+        echo -e "This script will update sources using the legacy format for Ubuntu versions before 24.04."
+        echo -e "Target file: /etc/apt/sources.list"
+    fi
+    echo -e "===================================\n"
 }
 
 # Function to fetch mirrors
 fetch_mirrors() {
-    mkdir -p "$SCRIPT_DIR/.cache"
+    mkdir -p "$SCRIPT_DIR/.cache" || {
+        echo "Error: Failed to create cache directory."
+        exit 1
+    }
     for country_code in "${COUNTRY_CODE_INCLUDED[@]}"; do
-        wget -q -O- "http://mirrors.ubuntu.com/$country_code.txt" >>"$SCRIPT_DIR/.cache/mirrors.txt"
+        if ! wget -q -O- "http://mirrors.ubuntu.com/$country_code.txt" >>"$SCRIPT_DIR/.cache/mirrors.txt"; then
+            echo "Error: Failed to fetch mirrors from http://mirrors.ubuntu.com/$country_code.txt"
+            exit 1
+        fi
     done
 }
 
@@ -213,8 +263,16 @@ test_mirror_speed() {
     declare -A speeds
 
     if [ -f "$SCRIPT_DIR/.cache/mirrors.txt" ]; then
-        mapfile -t mirrors <"$SCRIPT_DIR/.cache/mirrors.txt"
+        mapfile -t mirrors <"$SCRIPT_DIR/.cache/mirrors.txt" || {
+            echo "Error: Failed to read mirror list from cache."
+            exit 1
+        }
         total_mirrors=${#mirrors[@]}
+
+        if [ "$total_mirrors" -eq 0 ]; then
+            echo "Error: No mirrors found in the mirror list."
+            exit 1
+        fi
 
         echo -e "\nTesting mirrors for speed on $test_size_in_kb KB of data..."
         
@@ -242,7 +300,8 @@ test_mirror_speed() {
         done <<<"$sorted_mirrors"
 
     else
-        echo "No mirrors found. Please provide at least one valid country code."
+        echo "Error: No mirrors found. Please provide at least one valid country code."
+        exit 1
     fi
 }
 
@@ -276,14 +335,28 @@ check_root() {
 # Function to update sources for Ubuntu 24.04 or newer
 update_sources_ubuntu24() {
     local newMirror="$1"
-    echo "Updating sources for Ubuntu 24.04 or newer..."
+    echo "Updating sources for Ubuntu 24.04 or newer (ubuntu.sources format)..."
     if [ -d "/etc/apt/sources.list.d" ]; then
-        for sourcefile in /etc/apt/sources.list.d/*.sources; do
+        # Target only ubuntu.sources files, not all .sources files
+        for sourcefile in /etc/apt/sources.list.d/ubuntu.sources; do
             if [ -f "$sourcefile" ]; then
-                sudo sed -i "s|https\?://[^ ]*|$newMirror|g" "$sourcefile"
-                echo "Updated $sourcefile"
+                # Update URIs line in the ubuntu.sources file
+                sudo sed -i "/^URIs:/ s|https\?://[^ ]*|$newMirror|g" "$sourcefile" || {
+                    echo "Error: Failed to update $sourcefile"
+                    exit 1
+                }
+                echo "Updated $sourcefile with mirror: $newMirror"
             fi
         done
+        
+        if [ ! -f "/etc/apt/sources.list.d/ubuntu.sources" ]; then
+            echo "Warning: ubuntu.sources file not found in /etc/apt/sources.list.d/"
+            echo "No changes were made. Please check your Ubuntu version or use -L for legacy mode."
+            exit 1
+        fi
+    else
+        echo "Error: /etc/apt/sources.list.d directory not found, cannot update sources."
+        exit 1
     fi
 }
 
@@ -291,7 +364,16 @@ update_sources_ubuntu24() {
 update_sources_legacy() {
     local newMirror="$1"
     echo "Updating sources for older Ubuntu versions..."
-    sudo sed -i "s|deb [a-z]*://[^ ]* |deb ${newMirror} |g" /etc/apt/sources.list
+    if [ ! -f "/etc/apt/sources.list" ]; then
+        echo "Error: /etc/apt/sources.list file not found"
+        exit 1
+    fi
+    
+    sudo sed -i "s|deb [a-z]*://[^ ]* |deb ${newMirror} |g" /etc/apt/sources.list || {
+        echo "Error: Failed to update /etc/apt/sources.list"
+        exit 1
+    }
+    echo "Updated /etc/apt/sources.list with mirror: $newMirror"
 }
 
 # Function to select mirror
@@ -324,25 +406,31 @@ select_mirror() {
     if [ "$backup" = true ]; then
         time_postfix=$(date -u +"UTC%Y-%m-%dT%H_%M_%S")
         # Create backup directory if it doesn't exist
-        mkdir -p /etc/apt/sources.list.backup
+        mkdir -p /etc/apt/sources.list.backup || {
+            echo "Error: Failed to create backup directory."
+            exit 1
+        }
 
         # Check Ubuntu version and back up appropriate files
         if is_ubuntu_24_or_newer; then
-            echo "Backing up sources files for Ubuntu 24.04 or newer..."
-            # Back up all .sources files
-            if [ -d "/etc/apt/sources.list.d" ]; then
-                for sourcefile in /etc/apt/sources.list.d/*.sources; do
-                    if [ -f "$sourcefile" ]; then
-                        filename=$(basename "$sourcefile")
-                        cp -rp "$sourcefile" "/etc/apt/sources.list.backup/${filename}.${time_postfix}.bak"
-                        echo "Backed up $sourcefile to /etc/apt/sources.list.backup/${filename}.${time_postfix}.bak"
-                    fi
-                done
+            echo "Backing up ubuntu.sources file from /etc/apt/sources.list.d/..."
+            # Only back up ubuntu.sources file, not all .sources files
+            if [ -f "/etc/apt/sources.list.d/ubuntu.sources" ]; then
+                cp -rp "/etc/apt/sources.list.d/ubuntu.sources" "/etc/apt/sources.list.backup/ubuntu.sources.${time_postfix}.bak" || {
+                    echo "Error: Failed to create ubuntu.sources backup."
+                    exit 1
+                }
+                echo "Backed up /etc/apt/sources.list.d/ubuntu.sources to /etc/apt/sources.list.backup/ubuntu.sources.${time_postfix}.bak"
+            else 
+                echo "Warning: ubuntu.sources file not found in /etc/apt/sources.list.d/"
             fi
         else
-            echo "Backing up sources.list for Ubuntu version older than 24.04..."
+            echo "Backing up traditional sources.list for Ubuntu versions before 24.04..."
             # Back up the traditional sources.list
-            cp -rp /etc/apt/sources.list /etc/apt/sources.list.backup/sources.list."$time_postfix".bak
+            cp -rp /etc/apt/sources.list /etc/apt/sources.list.backup/sources.list."$time_postfix".bak || {
+                echo "Error: Failed to create sources.list backup."
+                exit 1
+            }
             if [ -f "/etc/apt/sources.list.backup/sources.list.$time_postfix.bak" ]; then
                 echo -e "Backup created in /etc/apt/sources.list.backup/sources.list.$time_postfix.bak\n"
             else
@@ -356,19 +444,23 @@ select_mirror() {
     
     # Update sources based on Ubuntu version
     if is_ubuntu_24_or_newer; then
-        update_sources_ubuntu24 "$newMirror"
+        update_sources_ubuntu24 "$newMirror" || exit 1
     else
-        update_sources_legacy "$newMirror"
+        update_sources_legacy "$newMirror" || exit 1
     fi
 
     echo "Testing new mirror speed with apt update..."
-    sudo rm -rf /var/lib/apt/lists/* && sudo apt update
+    sudo rm -rf /var/lib/apt/lists/* && sudo apt update || {
+        echo "Error: Failed to update apt packages with the new mirror."
+        exit 1
+    }
 }
 
 # Trap to cleanup cache on exit
 trap cleanup_cache EXIT
 
 # Main execution
+display_ubuntu_info
 process_arguments "$@"
 check_country_code
 fetch_mirrors
