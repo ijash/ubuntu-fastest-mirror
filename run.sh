@@ -141,6 +141,39 @@ process_arguments() {
     done
 }
 
+# Function to check Ubuntu version
+check_ubuntu_version() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        if [[ "$NAME" == "Ubuntu"* ]]; then
+            echo "$VERSION_ID"
+            return 0
+        else
+            echo "Warning: This script is designed for Ubuntu, but detected $NAME $VERSION_ID" >&2
+            return 1
+        fi
+    else
+        echo "Warning: Cannot determine distribution version, /etc/os-release not found" >&2
+        return 1
+    fi
+}
+
+# Function to determine if Ubuntu version is 24.04 or newer
+is_ubuntu_24_or_newer() {
+    local version
+    version=$(check_ubuntu_version)
+    if [[ -n "$version" ]]; then
+        if (( $(echo "$version >= 24.04" | bc -l) )); then
+            return 0  # true - is 24.04 or newer
+        else
+            return 1  # false - is older than 24.04
+        fi
+    else
+        # If version check fails, default to the older format for safety
+        return 1
+    fi
+}
+
 # Function to fetch mirrors
 fetch_mirrors() {
     mkdir -p "$SCRIPT_DIR/.cache"
@@ -212,6 +245,27 @@ check_root() {
     fi
 }
 
+# Function to update sources for Ubuntu 24.04 or newer
+update_sources_ubuntu24() {
+    local newMirror="$1"
+    echo "Updating sources for Ubuntu 24.04 or newer..."
+    if [ -d "/etc/apt/sources.list.d" ]; then
+        for sourcefile in /etc/apt/sources.list.d/*.sources; do
+            if [ -f "$sourcefile" ]; then
+                sudo sed -i "s|https\?://[^ ]*|$newMirror|g" "$sourcefile"
+                echo "Updated $sourcefile"
+            fi
+        done
+    fi
+}
+
+# Function to update sources for older Ubuntu versions
+update_sources_legacy() {
+    local newMirror="$1"
+    echo "Updating sources for older Ubuntu versions..."
+    sudo sed -i "s|deb [a-z]*://[^ ]* |deb ${newMirror} |g" /etc/apt/sources.list
+}
+
 # Function to select mirror
 select_mirror() {
     real_top_mirrors_count=${#top_mirrors[@]}
@@ -223,9 +277,8 @@ select_mirror() {
 
     if [ "$auto_select" = true ]; then
         newMirror=${top_mirrors[0]}
-
     else
-        echo -e "\nSelect one of the top $real_top_mirrors_count fastest mirrors. This will apply the selected mirror to your apt sources.list"
+        echo -e "\nSelect one of the top $real_top_mirrors_count fastest mirrors. This will apply the selected mirror to your apt sources."
         read -rp "Select from 1 to $real_top_mirrors_count , or enter 0 to cancel: " newMirror
         if [ "$newMirror" -eq 0 ]; then
             echo -e "Cancelled. No changes made.\nExiting..."
@@ -238,24 +291,49 @@ select_mirror() {
         fi
         newMirror=${top_mirrors[$((newMirror - 1))]}
     fi
+
+    # Create backup if requested
     if [ "$backup" = true ]; then
         time_postfix=$(date -u +"UTC%Y-%m-%dT%H_%M_%S")
-        mkdir -p /etc/apt/sources.list.backup && cp -rp /etc/apt/sources.list /etc/apt/sources.list.backup/sources.list."$time_postfix".bak
+        # Create backup directory if it doesn't exist
+        mkdir -p /etc/apt/sources.list.backup
 
-        if [ -f "/etc/apt/sources.list.backup/sources.list.$time_postfix.bak" ]; then
-            echo -e "Backup created in /etc/apt/sources.list.backup/sources.list.$time_postfix.bak\n"
+        # Check Ubuntu version and back up appropriate files
+        if is_ubuntu_24_or_newer; then
+            echo "Backing up sources files for Ubuntu 24.04 or newer..."
+            # Back up all .sources files
+            if [ -d "/etc/apt/sources.list.d" ]; then
+                for sourcefile in /etc/apt/sources.list.d/*.sources; do
+                    if [ -f "$sourcefile" ]; then
+                        filename=$(basename "$sourcefile")
+                        cp -rp "$sourcefile" "/etc/apt/sources.list.backup/${filename}.${time_postfix}.bak"
+                        echo "Backed up $sourcefile to /etc/apt/sources.list.backup/${filename}.${time_postfix}.bak"
+                    fi
+                done
+            fi
         else
-            echo "Backup failed."
-            exit 1
+            echo "Backing up sources.list for Ubuntu version older than 24.04..."
+            # Back up the traditional sources.list
+            cp -rp /etc/apt/sources.list /etc/apt/sources.list.backup/sources.list."$time_postfix".bak
+            if [ -f "/etc/apt/sources.list.backup/sources.list.$time_postfix.bak" ]; then
+                echo -e "Backup created in /etc/apt/sources.list.backup/sources.list.$time_postfix.bak\n"
+            else
+                echo "Backup failed."
+                exit 1
+            fi
         fi
-
     fi
 
     echo "Selected mirror: $newMirror"
-    echo "Updating sources.list..."
-    sudo sed -i "s|deb [a-z]*://[^ ]* |deb ${newMirror} |g" /etc/apt/sources.list
-    sleep 2
-    echo "testing new mirror speed with apt update..."
+    
+    # Update sources based on Ubuntu version
+    if is_ubuntu_24_or_newer; then
+        update_sources_ubuntu24 "$newMirror"
+    else
+        update_sources_legacy "$newMirror"
+    fi
+
+    echo "Testing new mirror speed with apt update..."
     sudo rm -rf /var/lib/apt/lists/* && sudo apt update
 }
 
