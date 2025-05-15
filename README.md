@@ -8,7 +8,7 @@ The Ubuntu Mirror Selection Script is a Bash script designed to help you find an
 
 ## Prerequisites
 
-- This script works on Ubuntu systems.
+- This script works on Ubuntu systems. Requires `wget` and `bc`.
 - Ensure you have the necessary permissions to run the script, especially if you intend to modify system files.
 - For Ubuntu 24.04+, this script will modify the `ubuntu.sources` file in `/etc/apt/sources.list.d/`.
 - For older Ubuntu versions, this script will modify the traditional `/etc/apt/sources.list` file.
@@ -79,6 +79,8 @@ To use the script, follow these steps:
    ```
 
    This command retrieves mirrors from the United States (US), Japan (JP), and Indonesia (ID).
+
+   To automatically fill in the region based on your IP you can use `./run.sh -c $(curl -s https://ipinfo.io/json | jq -r '.country')` (requires `jq` to be installed).
 
 3. **Automatic Selection**: To automatically select the fastest mirror without user prompt and backup the sources files, you can use the `-a` or `--auto` option:
 

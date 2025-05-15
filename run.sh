@@ -332,6 +332,15 @@ check_root() {
     fi
 }
 
+# Function to use sudo only if available (relavant when sudo is unavailable, like in docker)
+run_sudo() {
+    if command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+    else
+        "$@"
+    fi
+}
+
 # Function to update sources for Ubuntu 24.04 or newer
 update_sources_ubuntu24() {
     local newMirror="$1"
@@ -341,7 +350,7 @@ update_sources_ubuntu24() {
         for sourcefile in /etc/apt/sources.list.d/ubuntu.sources; do
             if [ -f "$sourcefile" ]; then
                 # Update URIs line in the ubuntu.sources file
-                sudo sed -i "/^URIs:/ s|https\?://[^ ]*|$newMirror|g" "$sourcefile" || {
+                    run_sudo sed -i "/^URIs:/ s|https\?://[^ ]*|$newMirror|g" "$sourcefile" || {
                     echo "Error: Failed to update $sourcefile"
                     exit 1
                 }
@@ -369,7 +378,7 @@ update_sources_legacy() {
         exit 1
     fi
     
-    sudo sed -i "s|deb [a-z]*://[^ ]* |deb ${newMirror} |g" /etc/apt/sources.list || {
+    run_sudo sed -i "s|deb [a-z]*://[^ ]* |deb ${newMirror} |g" /etc/apt/sources.list || {
         echo "Error: Failed to update /etc/apt/sources.list"
         exit 1
     }
@@ -450,7 +459,7 @@ select_mirror() {
     fi
 
     echo "Testing new mirror speed with apt update..."
-    sudo rm -rf /var/lib/apt/lists/* && sudo apt update || {
+    run_sudo rm -rf /var/lib/apt/lists/* && run_sudo apt update || {
         echo "Error: Failed to update apt packages with the new mirror."
         exit 1
     }
