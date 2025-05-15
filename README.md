@@ -8,7 +8,8 @@ The Ubuntu Mirror Selection Script is a Bash script designed to help you find an
 
 ## Prerequisites
 
-- This script works on Ubuntu systems. Requires `wget` and `bc`.
+- This script works on Ubuntu systems.
+- Requires `wget` and `bc` to be installed.
 - Ensure you have the necessary permissions to run the script, especially if you intend to modify system files.
 - For Ubuntu 24.04+, this script will modify the `ubuntu.sources` file in `/etc/apt/sources.list.d/`.
 - For older Ubuntu versions, this script will modify the traditional `/etc/apt/sources.list` file.
@@ -31,7 +32,7 @@ You can obtain the Ubuntu Mirror Selection Script by either downloading it direc
 - **Download from GitHub**: [Download Script](https://raw.githubusercontent.com/ijash/ubuntu-fastest-mirror/master/run.sh) or
 
   ```bash
-  curl -O https://raw.githubusercontent.com/ijash/ubuntu-fastest-mirror/master/run.sh
+  wget https://raw.githubusercontent.com/ijash/ubuntu-fastest-mirror/master/run.sh
   ```
 
   This will download the script directly to your current directory.
@@ -59,6 +60,11 @@ You can obtain the Ubuntu Mirror Selection Script by either downloading it direc
    cd ubuntu-fastest-mirror
    chmod +x run.sh
    ```
+3. **Dependencies**: Ensure you have the required dependencies installed. You can install them using the following command:
+
+   ```bash
+   sudo apt-get install wget bc
+   ```
 
 ## Usage
 
@@ -80,7 +86,13 @@ To use the script, follow these steps:
 
    This command retrieves mirrors from the United States (US), Japan (JP), and Indonesia (ID).
 
-   To automatically fill in the region based on your IP you can use `./run.sh -c $(curl -s https://ipinfo.io/json | jq -r '.country')` (requires `jq` to be installed).
+   To automatically fill in the region based on your IP, you can use:
+
+   ```
+   ./run.sh -c $(curl -s https://ipinfo.io/json | jq -r '.country')
+   ```
+
+   _(requires `jq` to be installed)._
 
 3. **Automatic Selection**: To automatically select the fastest mirror without user prompt and backup the sources files, you can use the `-a` or `--auto` option:
 
@@ -154,3 +166,16 @@ To use the script, follow these steps:
   ```
 
   This backs up your sources files, tests mirrors from Japan and the US with a 200KB sample size, and uses the legacy sources.list format.
+
+## Docker
+
+If you use Docker, many of the extra apps are stripped out. make sure to install `wget` and `bc` in your Dockerfile.
+
+## Contributing
+
+If you would like to contribute to this project, please feel free to fork the repository and submit a pull request. Your contributions are welcome!
+
+## Contributors
+
+- [ijash](https://github.com/ijash)
+- [kampelmuehler](https://github.com/kampelmuehler)
