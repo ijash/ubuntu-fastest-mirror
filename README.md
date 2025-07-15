@@ -179,3 +179,15 @@ If you would like to contribute to this project, please feel free to fork the re
 
 - [ijash](https://github.com/ijash)
 - [kampelmuehler](https://github.com/kampelmuehler)
+
+---
+
+## Support This Project
+
+If this script saved you time and made your Ubuntu experience smoother, consider supporting its development! Your contribution helps maintain and improve this tool for the entire community.
+
+[Buy me a coffee on Ko-fi](https://ko-fi.com/A0A31H04GB)
+
+[Support via PayPal](https://paypal.me/ijash)
+
+Every contribution, no matter how small, is greatly appreciated and motivates continued development of useful tools like this one!

@@ -1,1 +1,37 @@
+# IDE and Editor files
+.vscode/
+
+# Build directories
+dist/
+build/
+node_modules/
+
+# Cache and temporary files
 .cache
+memory-bank
+tmp/
+*.tmp
+*.log
+*.bak
+*.swp
+*.pid
+*.pid.lock
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment files
+*.env
+*.env.local
+*.env.development
+*.env.production
+*.env.test
+*.env.staging
+
+# System files
+*.DS_Store
+
+# GitHub directory
+.github/
