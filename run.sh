@@ -21,7 +21,7 @@
 #%
 #% OPTIONS
 #%    -h, --help       Show this help message and exit.
-#%    -c, --country    Specify one or more country codes to retrieve mirrors from. If not
+#%    -c, -C, --country    Specify one or more country codes to retrieve mirrors from. If not
 #%                     provided, the script will default to using mirrors from
 #%                     http://mirrors.ubuntu.com/mirrors.txt.
 #%    -a, --auto       Select fastest mirror automatically without user
@@ -128,7 +128,8 @@ format_color() {
 
 # Function to convert speed to human-readable format
 convert_speed() {
-    local speed=$1
+    local speed=${1%%.*}
+    speed=${speed:-0}
     if ((speed >= 1000000000)); then
         echo "$(bc -l <<<"scale=1; $speed / 1000000000") Gbps"  # Gigabits per second
     elif ((speed >= 1000000)); then
@@ -154,7 +155,7 @@ process_arguments() {
 
     while [[ "$1" != "" ]]; do
         case "$1" in
-        -c | --country)
+        -c | -C | --country)
             shift
             while [[ "$1" != "" && ! "$1" =~ ^- ]]; do
                 country_code=$(echo "$1" | tr '[:lower:]' '[:upper:]')
@@ -223,7 +224,7 @@ is_ubuntu_24_or_newer() {
     fi
 
     local version
-    version=$(check_ubuntu_version)
+    version=$(check_ubuntu_version 2>/dev/null)
     if [[ -n "$version" ]]; then
         if (( $(echo "$version >= 24.04" | bc -l) )); then
             return 0  # true - is 24.04 or newer
@@ -270,6 +271,7 @@ fetch_mirrors() {
         echo "Error: Failed to create cache directory."
         exit 1
     }
+    rm -f "$SCRIPT_DIR/.cache/mirrors.txt"
     for country_code in "${COUNTRY_CODE_INCLUDED[@]}"; do
         if ! wget -q -O- "http://mirrors.ubuntu.com/$country_code.txt" >>"$SCRIPT_DIR/.cache/mirrors.txt"; then
             echo "Error: Failed to fetch mirrors from http://mirrors.ubuntu.com/$country_code.txt"
@@ -306,7 +308,7 @@ test_mirror_speed() {
             raw_speed_bps=$(curl --max-time 2 -r 0-$test_size_in_bytes -s -w %{speed_download} -o /dev/null "$mirror_url/ls-lR.gz")
             speed=$(convert_speed "$raw_speed_bps")
             speeds["$mirror_url"]="$raw_speed_bps"
-            echo -e "[$seq_num/$total_mirrors] $mirror_url --> $(format_color "$raw_speed_bps") $speed $speed_unit $reset_color"
+            echo -e "[$seq_num/$total_mirrors] $mirror_url --> $(format_color "$raw_speed_bps") $speed $reset_color"
         done
 
         sorted_mirrors=$(for mirror in "${!speeds[@]}"; do echo "$mirror ${speeds[$mirror]}"; done | sort -rn -k2 | head -n "$TOP_LIST_AMOUNT" | nl)

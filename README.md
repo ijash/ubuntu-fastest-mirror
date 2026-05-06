@@ -9,7 +9,7 @@ The Ubuntu Mirror Selection Script is a Bash script designed to help you find an
 ## Prerequisites
 
 - This script works on Ubuntu systems.
-- Requires `curl`, `wget` and `bc` to be installed.
+- Requires `curl`, `wget`, `bc`, `awk`, `sed` and other standard Linux core utilities to be installed.
 - Ensure you have the necessary permissions to run the script, especially if you intend to modify system files.
 - For Ubuntu 24.04+, this script will modify the `ubuntu.sources` file in `/etc/apt/sources.list.d/`.
 - For older Ubuntu versions, this script will modify the traditional `/etc/apt/sources.list` file.
@@ -63,7 +63,7 @@ You can obtain the Ubuntu Mirror Selection Script by either downloading it direc
 3. **Dependencies**: Ensure you have the required dependencies installed. You can install them using the following command:
 
    ```bash
-   sudo apt-get install wget bc
+   sudo apt-get install curl wget bc awk sed
    ```
 
 ## Usage
@@ -78,7 +78,7 @@ To use the script, follow these steps:
 
    This will provide you with a summary of available options, examples, and usage instructions.
 
-2. **Retrieve Mirrors**: You can retrieve mirrors based on [country codes available](http://mirrors.ubuntu.com/) using the `-c` or `--country` option. For example:
+2. **Retrieve Mirrors**: You can retrieve mirrors based on [country codes available](http://mirrors.ubuntu.com/) using the `-c`, `-C`, or `--country` option. For example:
 
    ```bash
    ./run.sh -c US JP ID
@@ -169,7 +169,7 @@ To use the script, follow these steps:
 
 ## Docker
 
-If you use Docker, many of the extra apps are stripped out. make sure to install `wget` and `bc` in your Dockerfile.
+If you use Docker, many of the extra apps are stripped out. make sure to install `curl`, `wget`, `bc`, `awk`, and `sed` in your Dockerfile.
 
 ## Contributing
 
