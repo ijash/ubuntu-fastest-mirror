@@ -9,7 +9,7 @@ The Ubuntu Mirror Selection Script is a Bash script designed to help you find an
 ## Prerequisites
 
 - This script works on Ubuntu systems.
-- Requires `wget` and `bc` to be installed.
+- Requires `curl`, `wget` and `bc` to be installed.
 - Ensure you have the necessary permissions to run the script, especially if you intend to modify system files.
 - For Ubuntu 24.04+, this script will modify the `ubuntu.sources` file in `/etc/apt/sources.list.d/`.
 - For older Ubuntu versions, this script will modify the traditional `/etc/apt/sources.list` file.
