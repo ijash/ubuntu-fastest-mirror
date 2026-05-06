@@ -70,6 +70,27 @@ backup=false
 test_size_in_kb=100
 force_legacy_mode=false
 
+# Function to check dependencies
+check_dependencies() {
+    local dependencies=("curl" "wget" "bc" "awk" "sed" "tr" "sort" "head" "nl" "apt" "realpath" "dirname" "rm" "date" "mkdir" "cp" "id")
+    local missing_deps=()
+
+    for cmd in "${dependencies[@]}"; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            missing_deps+=("$cmd")
+        fi
+    done
+
+    if [ ${#missing_deps[@]} -ne 0 ]; then
+        echo "Error: The following required dependencies are missing:" >&2
+        for cmd in "${missing_deps[@]}"; do
+            echo "  - $cmd" >&2
+        done
+        echo "Please install them before running this script." >&2
+        exit 1
+    fi
+}
+
 # Function to clean up cache on exit
 cleanup_cache() {
     rm -rf "$SCRIPT_DIR/.cache"
@@ -469,8 +490,9 @@ select_mirror() {
 trap cleanup_cache EXIT
 
 # Main execution
-display_ubuntu_info
+check_dependencies
 process_arguments "$@"
+display_ubuntu_info
 check_country_code
 fetch_mirrors
 test_mirror_speed "${COUNTRY_CODE_INCLUDED[@]}"
